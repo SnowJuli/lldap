@@ -77,6 +77,9 @@ For more features (OAuth/OpenID support, reverse proxy, ...) you can install
 other components (KeyCloak, Authelia, ...) using this server as the source of
 truth for users, via LDAP.
 
+By default, the data is stored in SQLite, but you can swap the backend with
+MySQL/MariaDB or PostgreSQL.
+
 ## Installation
 
 ### With Docker
@@ -131,17 +134,25 @@ services:
       - LLDAP_JWT_SECRET=REPLACE_WITH_RANDOM
       - LLDAP_LDAP_USER_PASS=REPLACE_WITH_PASSWORD
       - LLDAP_LDAP_BASE_DN=dc=example,dc=com
+      # You can also set a different database:
+      # - LLDAP_DATABASE_URL=mysql://mysql-user:password@mysql-server/my-database
+      # - LLDAP_DATABASE_URL=postgres://postgres-user:password@postgres-server/my-database
 ```
 
 Then the service will listen on two ports, one for LDAP and one for the web
 front-end.
 
+### With Kubernetes
+
+See https://github.com/Evantage-WS/lldap-kubernetes for a LLDAP deployment for Kubernetes
+
 ### From source
+
+#### Backend
 
 To compile the project, you'll need:
 
-- nodejs 16: [nodesource nodejs installation guide](https://github.com/nodesource/distributions)
-- curl: `sudo apt install curl`
+- curl and gzip: `sudo apt install curl gzip`
 - Rust/Cargo: [rustup.rs](https://rustup.rs/)
 
 Then you can compile the server (and the migration tool if you want):
@@ -153,14 +164,21 @@ cargo build --release -p lldap -p migration-tool
 The resulting binaries will be in `./target/release/`. Alternatively, you can
 just run `cargo run -- run` to run the server.
 
+#### Frontend
+
 To bring up the server, you'll need to compile the frontend. In addition to
-cargo, you'll need:
+`cargo`, you'll need:
 
 - WASM-pack: `cargo install wasm-pack`
-- rollup.js: `npm install rollup`
 
-Then you can build the frontend files with `./app/build.sh` (you'll need to run
-this after every front-end change to update the WASM package served).
+Then you can build the frontend files with
+
+```shell
+./app/build.sh
+````
+
+(you'll need to run this after every front-end change to update the WASM
+package served).
 
 The default config is in `src/infra/configuration.rs`, but you can override it
 by creating an `lldap_config.toml`, setting environment variables or passing
@@ -232,6 +250,7 @@ folder for help with:
 - [Airsonic Advanced](example_configs/airsonic-advanced.md)
 - [Apache Guacamole](example_configs/apacheguacamole.md)
 - [Authelia](example_configs/authelia_config.yml)
+- [Authentik](example_configs/authentik.md)
 - [Bookstack](example_configs/bookstack.env.example)
 - [Calibre-Web](example_configs/calibre_web.md)
 - [Dell iDRAC](example_configs/dell_idrac.md)
@@ -247,9 +266,12 @@ folder for help with:
 - [KeyCloak](example_configs/keycloak.md)
 - [Matrix](example_configs/matrix_synapse.yml)
 - [Nextcloud](example_configs/nextcloud.md)
+- [Nexus](example_configs/nexus.md)
 - [Organizr](example_configs/Organizr.md)
 - [Portainer](example_configs/portainer.md)
+- [Rancher](example_configs/rancher.md)
 - [Seafile](example_configs/seafile.md)
+- [Shaarli](example_configs/shaarli.md)
 - [Syncthing](example_configs/syncthing.md)
 - [Vaultwarden](example_configs/vaultwarden.md)
 - [WeKan](example_configs/wekan.md)
@@ -258,30 +280,37 @@ folder for help with:
 - [XBackBone](example_configs/xbackbone_config.php)
 - [Zendto](example_configs/zendto.md)
 
+## Migrating from SQLite
+
+If you started with an SQLite database and would like to migrate to
+MySQL/MariaDB or PostgreSQL, check out the [DB
+migration docs](/docs/database_migration.md).
+
 ## Comparisons with other services
 
 ### vs OpenLDAP
 
-OpenLDAP is a monster of a service that implements all of LDAP and all of its
-extensions, plus some of its own. That said, if you need all that flexibility,
-it might be what you need! Note that installation can be a bit painful
-(figuring out how to use `slapd`) and people have mixed experiences following
-tutorials online. If you don't configure it properly, you might end up storing
-passwords in clear, so a breach of your server would reveal all the stored
-passwords!
+[OpenLDAP](https://www.openldap.org) is a monster of a service that implements
+all of LDAP and all of its extensions, plus some of its own. That said, if you
+need all that flexibility, it might be what you need! Note that installation
+can be a bit painful (figuring out how to use `slapd`) and people have mixed
+experiences following tutorials online. If you don't configure it properly, you
+might end up storing passwords in clear, so a breach of your server would
+reveal all the stored passwords!
 
 OpenLDAP doesn't come with a UI: if you want a web interface, you'll have to
-install one (not that many that look nice) and configure it.
+install one (not that many look nice) and configure it.
 
 LLDAP is much simpler to setup, has a much smaller image (10x smaller, 20x if
 you add PhpLdapAdmin), and comes packed with its own purpose-built web UI.
+However, it's not as flexible as OpenLDAP.
 
 ### vs FreeIPA
 
-FreeIPA is the one-stop shop for identity management: LDAP, Kerberos, NTP, DNS,
-Samba, you name it, it has it. In addition to user management, it also does
-security policies, single sign-on, certificate management, linux account
-management and so on.
+[FreeIPA](http://www.freeipa.org) is the one-stop shop for identity management:
+LDAP, Kerberos, NTP, DNS, Samba, you name it, it has it. In addition to user
+management, it also does security policies, single sign-on, certificate
+management, linux account management and so on.
 
 If you need all of that, go for it! Keep in mind that a more complex system is
 more complex to maintain, though.
@@ -289,6 +318,18 @@ more complex to maintain, though.
 LLDAP is much lighter to run (<10 MB RAM including the DB), easier to
 configure (no messing around with DNS or security policies) and simpler to
 use. It also comes conveniently packed in a docker container.
+
+### vs Kanidm
+
+[Kanidm](https://kanidm.com) is an up-and-coming Rust identity management
+platform, covering all your bases: OAuth, Linux accounts, SSH keys, Radius,
+WebAuthn. It comes with a (read-only) LDAPS server.
+
+It's fairly easy to install and does much more; but their LDAP server is
+read-only, and by having more moving parts it is inherently more complex. If
+you don't need to modify the users through LDAP and you're planning on
+installing something like [KeyCloak](https://www.keycloak.org) to provide
+modern identity protocols, check out Kanidm.
 
 ## I can't log in!
 

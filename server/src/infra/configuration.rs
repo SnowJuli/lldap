@@ -25,11 +25,11 @@ pub struct MailOptions {
     pub server: String,
     #[builder(default = "587")]
     pub port: u16,
-    #[builder(default = r#""admin".to_string()"#)]
+    #[builder(default = r#"String::default()"#)]
     pub user: String,
     #[builder(default = r#"SecUtf8::from("")"#)]
     pub password: SecUtf8,
-    #[builder(default = "SmtpEncryption::TLS")]
+    #[builder(default = "SmtpEncryption::Tls")]
     pub smtp_encryption: SmtpEncryption,
     /// Deprecated.
     #[builder(default = "None")]
@@ -209,6 +209,10 @@ impl ConfigOverrider for RunOpts {
         if let Some(url) = self.http_url.as_ref() {
             config.http_url = url.to_string();
         }
+
+        if let Some(database_url) = self.database_url.as_ref() {
+            config.database_url = database_url.to_string();
+        }
         self.smtp_opts.override_config(config);
         self.ldaps_opts.override_config(config);
     }
@@ -271,6 +275,9 @@ impl ConfigOverrider for SmtpOpts {
         }
         if let Some(tls_required) = self.smtp_tls_required {
             config.smtp_options.tls_required = Some(tls_required);
+        }
+        if let Some(enable_password_reset) = self.smtp_enable_password_reset {
+            config.smtp_options.enable_password_reset = enable_password_reset;
         }
     }
 }
